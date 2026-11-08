@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Top emotes · Destiny.gg chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f8; --panel: #ffffff; --text: #181a22; --muted: #646a7c;
+  --line: #dfe2ea; --bar: #4453e0; --bar-bg: #e8eaf4;
+  --font: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141a; --panel: #1b1e27; --text: #eceef5; --muted: #98a0b6;
+    --line: #2b2f3c; --bar: #8794ff; --bar-bg: #262a38;
+  }
+}
+* { box-sizing: border-box; }
+html { height: 100%; }
+body {
+  margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+  font-family: var(--font); line-height: 1.45;
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+}
+main { max-width: 760px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+h1 { font-size: clamp(2.4rem, 8vw, 4rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1; margin: 0 0 .6rem; }
+.sub { color: var(--muted); margin: 0 0 2rem; max-width: 52ch; }
+.tools { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; }
+input[type=search] {
+  flex: 1; font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: .7rem .9rem;
+}
+input[type=search]:focus-visible, button:focus-visible { outline: 2px solid var(--bar); outline-offset: 2px; }
+#tally { color: var(--muted); font-size: .9rem; white-space: nowrap; }
+.live[hidden] { display: none; }
+.live { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin-bottom: 1rem; }
+#live { font: inherit; font-weight: 600; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .55rem 1rem; cursor: pointer; }
+#status { color: var(--muted); font-size: .9rem; flex: 1 1 14rem; }
+.opt { display: block; color: var(--muted); font-size: .9rem; margin: 0 0 1rem; cursor: pointer; }
+.opt input { margin-right: .4rem; accent-color: var(--bar); }
+ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+li { display: grid; grid-template-columns: 2.6rem 3.5rem 1fr; align-items: center; gap: .75rem; padding: .7rem 1rem; border-top: 1px solid var(--line); }
+li:first-child { border-top: 0; }
+.rank { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.pic { height: 2.5rem; display: flex; align-items: center; justify-content: center; }
+.pic img { max-height: 100%; max-width: 100%; object-fit: contain; }
+.podium .pic { height: 3.5rem; }
+.podium .rank { font-size: 1.5rem; color: var(--text); font-weight: 800; }
+.podium .name { font-size: 1.2rem; }
+.meta { min-width: 0; }
+.line { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.count { font-variant-numeric: tabular-nums; color: var(--muted); }
+.track { height: 6px; border-radius: 3px; background: var(--bar-bg); margin-top: .35rem; overflow: hidden; }
+.fill { height: 100%; background: var(--bar); border-radius: 3px; }
+#more { display: block; margin: 1.25rem auto 0; font: inherit; font-weight: 600; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .65rem 1.2rem; cursor: pointer; }
+#msg { color: var(--muted); padding: 1.5rem 0; }
+#msg code { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .1rem .35rem; }
+@media (max-width: 440px) { li { grid-template-columns: 2rem 2.8rem 1fr; gap: .5rem; padding-inline: .7rem; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Top emotes</h1>
+  <p class="sub">The most-used emotes in Destiny.gg chat, all time. <span id="updated"></span></p>
+  <div class="tools">
+    <input id="q" type="search" placeholder="Search emotes" aria-label="Search emotes" autocomplete="off">
+    <span id="tally"></span>
+  </div>
+  <label class="opt"><input type="checkbox" id="words"> Include emotes that are also everyday words (counts are inflated, marked *)</label>
+  <div class="live" hidden>
+    <button id="live" type="button">Update live from RustleSearch</button>
+    <span id="status" role="status"></span>
+  </div>
+  <div id="msg">Loading emotes…</div>
+  <ol id="list" hidden></ol>
+  <button id="more" hidden>Show more</button>
+</main>
+<script>
+const PAGE = 100;
+let all = [], shown = PAGE, query = "", showWords = false;
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---- LIVE MODE SETTINGS ----
+// UNVERIFIED: these are guesses at RustleSearch’s API. Open rustlesearch.dev,
+// search an emote with DevTools > Network open, then copy the real request URL
+// into searchUrl() and point readCount() at the total-results number.
+const LIVE = {
+  enabled: false, // set to true to show the "Update live" button
+  searchUrl: (name) =>
+    "https://api-v2.rustlesearch.dev/anon/search?" + new URLSearchParams({ text: name, channel: "Destinygg" }),
+  readCount: (json) => json?.data?.total ?? json?.total ?? null,
+  concurrency: 2, // requests in flight at once
+  delayMs: 800,   // pause after each request, per lane
+};
+
+const CACHE_KEY = "top-emotes-live-v1";
+const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)); } catch { return null; } };
+const writeCache = (counts) => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), counts })); } catch {} };
+
+function setUpdated(ts, live) {
+  $("updated").textContent = (live ? "Live counts from " : "Updated ") +
+    new Date(ts).toLocaleString(undefined, live ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" }) + ".";
+}
+
+async function fetchCount(name) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let res;
+    try { res = await fetch(LIVE.searchUrl(name)); }
+    catch { throw Object.assign(new Error("network"), { kind: "network" }); }
+    if (res.status === 429) { await sleep(4000 * (attempt + 1)); continue; }
+    if (!res.ok) throw Object.assign(new Error("HTTP " + res.status), { kind: "http" });
+    let json;
+    try { json = await res.json(); }
+    catch { throw Object.assign(new Error("not json"), { kind: "shape", detail: "(reply was not JSON)" }); }
+    const n = LIVE.readCount(json);
+    if (typeof n !== "number") {
+      console.log("RustleSearch reply for", name, json);
+      throw Object.assign(new Error("no count"), { kind: "shape", detail: JSON.stringify(json).slice(0, 400) });
+    }
+    return n;
+  }
+  throw Object.assign(new Error("rate limited"), { kind: "rate" });
+}
+
+const FAILURES = {
+  network: "Couldn’t reach RustleSearch from the browser. It most likely blocks requests from other sites (CORS), or LIVE.searchUrl is wrong.",
+  shape: "RustleSearch replied, but no count was found. Adjust LIVE.readCount in the page.",
+  rate: "RustleSearch is rate limiting requests. Try again in a few minutes.",
+  http: "RustleSearch returned an error.",
+};
+
+let running = false, stopRequested = false;
+async function poll() {
+  running = true; stopRequested = false;
+  $("live").textContent = "Stop";
+  const names = all.map((e) => e.name);
+  const byName = new Map(all.map((e) => [e.name, e]));
+  const counts = {};
+  for (const e of all) if (typeof e.count === "number") counts[e.name] = e.count;
+  let next = 0, done = 0, failure = null, lastDraw = 0;
+
+  const lane = async () => {
+    while (!stopRequested && !failure && next < names.length) {
+      const name = names[next++];
+      try {
+        const n = await fetchCount(name);
+        byName.get(name).count = n;
+        counts[name] = n;
+      } catch (err) { failure = err; break; }
+      done++;
+      $("status").textContent = `Updating… ${done}/${names.length}`;
+      if (Date.now() - lastDraw > 700) { lastDraw = Date.now(); render(); }
+      await sleep(LIVE.delayMs);
+    }
+  };
+  await Promise.all(Array.from({ length: LIVE.concurrency }, lane));
+
+  if (done > 0) { writeCache(counts); setUpdated(Date.now(), true); }
+  render();
+  $("status").textContent = failure
+    ? (FAILURES[failure.kind] || "Something went wrong.") +
+      (failure.detail ? ` Reply started: ${failure.detail}` : "") +
+      (done ? ` Kept ${done} fresh counts.` : " Showing the last saved counts.")
+    : stopRequested ? `Stopped after ${done}/${names.length}.` : "Up to date.";
+  $("live").textContent = "Update live from RustleSearch";
+  running = false;
+}
+
+function render() {
+  const q = query.trim().toLowerCase();
+  const counted = all.filter((e) => typeof e.count === "number").sort((a, b) => b.count - a.count);
+  const base = (showWords ? counted : counted.filter((e) => !e.ambiguous)).map((e, i) => ({ ...e, rank: i + 1 }));
+  const rows = q ? base.filter((e) => e.name.toLowerCase().includes(q)) : base;
+  const max = base[0]?.count || 1;
+  const list = $("list");
+  list.replaceChildren();
+  for (const e of rows.slice(0, shown)) {
+    const li = document.createElement("li");
+    if (e.rank <= 3) li.className = "podium";
+    const rank = Object.assign(document.createElement("span"), { className: "rank", textContent: e.rank });
+    const pic = document.createElement("span");
+    pic.className = "pic";
+    if (e.image) {
+      const img = new Image();
+      img.src = e.image; img.alt = ""; img.loading = "lazy";
+      img.onerror = () => img.remove();
+      pic.append(img);
+    }
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const line = document.createElement("div");
+    line.className = "line";
+    line.append(
+      Object.assign(document.createElement("span"), {
+        className: "name",
+        textContent: e.name + (e.ambiguous ? " *" : ""),
+        title: e.ambiguous ? "Also an everyday word, so this count includes plain-text uses." : "",
+      }),
+      Object.assign(document.createElement("span"), { className: "count", textContent: e.count.toLocaleString() })
+    );
+    const track = document.createElement("div");
+    track.className = "track";
+    const fill = document.createElement("div");
+    fill.className = "fill";
+    fill.style.width = Math.max(0.5, (e.count / max) * 100) + "%";
+    track.append(fill);
+    meta.append(line, track);
+    li.append(rank, pic, meta);
+    list.append(li);
+  }
+  $("tally").textContent = q ? `${rows.length} match${rows.length === 1 ? "" : "es"}` : `${base.length} emotes`;
+  $("more").hidden = rows.length <= shown;
+  $("msg").hidden = rows.length > 0;
+  if (!rows.length) $("msg").textContent = q ? "No emotes match that search."
+    : LIVE.enabled ? "No counts yet. Press “Update live from RustleSearch” to fetch them."
+    : "No counts yet. Run node collect.mjs to create emotes.json next to this page.";
+}
+
+// Prefer emotes.json (names, images, saved counts); fall back to the plain emotes.txt list.
+async function loadList() {
+  try {
+    const res = await fetch("emotes.json", { cache: "no-cache" });
+    if (res.ok) {
+      const data = await res.json();
+      return { emotes: data.emotes, updated: data.updated };
+    }
+  } catch {}
+  const res = await fetch("emotes.txt", { cache: "no-cache" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const emotes = (await res.text()).split(/\r?\n/).map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"))
+    .map((l) => {
+      const ambiguous = l.startsWith("~");
+      const [name, image] = l.replace(/^~/, "").split(",").map((s) => s.trim());
+      return { name, image: image || null, ambiguous, count: null };
+    });
+  return { emotes, updated: null };
+}
+
+async function init() {
+  try {
+    const { emotes, updated } = await loadList();
+    all = emotes;
+    const cache = readCache();
+    if (cache?.counts && (!updated || cache.t > Date.parse(updated))) {
+      for (const e of all) if (typeof cache.counts[e.name] === "number") e.count = cache.counts[e.name];
+      setUpdated(cache.t, true);
+    } else if (updated) {
+      setUpdated(updated, false);
+    }
+    $("live").parentElement.hidden = !LIVE.enabled;
+    $("list").hidden = false;
+    render();
+  } catch (err) {
+    $("msg").innerHTML = "Couldn’t load <code>emotes.json</code> or <code>emotes.txt</code>. Put one next to this page and open it through a web server (for example <code>npx serve</code>), not by double-clicking the file.";
+  }
+}
+
+$("q").addEventListener("input", (e) => { query = e.target.value; shown = PAGE; render(); });
+$("words").addEventListener("change", (e) => { showWords = e.target.checked; shown = PAGE; render(); });
+$("live").addEventListener("click", () => { if (running) stopRequested = true; else poll(); });
+$("more").addEventListener("click", () => { shown += PAGE; render(); });
+init();
+</script>
+</body>
+</html>
